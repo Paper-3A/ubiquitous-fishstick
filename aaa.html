@@ -10,10 +10,12 @@
     body { padding: 0; margin: 0; }
 
     #container{
-        position: relative;
+        position: fixed;
         width: 100%;
-        height: 800px;
+        height: 600px;
         margin: auto;
+        top: 0;
+        left: 0;
     }
 
     /*background*/
@@ -67,11 +69,11 @@
     #player{
         position: absolute;
         transform: translateY(0px);
-        top:320px;
+        top:380px;
         left:30px;
         animation-name: none;
         animation-timing-function: ease-in-out ;
-        animation-duration: 0.8s;
+        animation-duration: 0.7s;
         animation-iteration-count: 1;
     }
 
@@ -102,6 +104,41 @@
         font-size: 24px;
     }
 
+    #restart-btn{
+        position: absolute;
+        bottom: 50px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 15px 30px;
+        font-size: 18px;
+        font-family: Dosis, sans-serif;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        display: none;
+    }
+
+    #restart-btn:hover{
+        background-color: #45a049;
+    }
+
+    #paused {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-family: Dosis, sans-serif;
+        color: #333;
+        font-size: 4rem;
+        display: none;
+        pointer-events: none;
+        background: rgba(255,255,255,0.6);
+        padding: 20px 40px;
+        border-radius: 8px;
+    }
+
     @keyframes cloudAnimation{
         from{transform: translateX(2000px);}
         to  {transform: translateX(-200px);}
@@ -114,7 +151,7 @@
 
     @keyframes playerAnimation{
         0%  {transform: translateY(0px);}
-        50% {transform: translateY(-160px);}
+        50% {transform: translateY(-250px);}
         100%{transform: translateY(0px);}
     }
 
@@ -126,23 +163,79 @@
     </style>
     <script>
         let Obstacle_time = 3;
+        let score = 0;
+        let gameOver = false;
+        let isPaused = false;
+        
+        // 4 obstacle entities to randomly choose from
+        const obstacles = [
+            "https://archives.bulbagarden.net/media/upload/7/73/1014Okidogi.png",
+            "https://archives.bulbagarden.net/media/upload/e/e1/1015Munkidori.png",
+            "https://archives.bulbagarden.net/media/upload/c/cb/1016Fezandipiti.png",
+            "https://archives.bulbagarden.net/media/upload/5/5a/1025Pecharunt.png"
+        ];
+        
+        // Function to get a random obstacle image
+        function getRandomObstacle() {
+            return obstacles[Math.floor(Math.random() * obstacles.length)];
+        }
+        
+        // Restart the game
+        function restartGame() {
+            gameOver = false;
+            Obstacle_time = 3;
+            score = 0;
+            $("#score-value").text(score);
+            $("#gameover").hide();
+            $("#restart-btn").hide();
+            // Reset player position and animation
+            $("#player").css("animation-name","none").css("transform","translateY(0px)");
+            // Reset obstacle position, animation, and speed
+            $("#obstacle").hide().css("animation-name","none").css("transform","translate(0px, 0px)").css("animation-duration","3s");
+            $(".cloud").css("animation-play-state","running");
+            $("#player").css("animation-play-state","running");
+            $("#obstacle").css("animation-play-state","running");
+            setTimeout(makeObstacle, Math.random() * 2000);
+            setTimeout(checkGameover, 100);
+        }
+        
         // Check whether the game is over if the player is near the obstacle
         function checkGameover() {
 
-            // You need to keep on checking for the gameover situation here
-            // Read the transform property of the player and obstacle
-            let playerY = $('#player').css('transform').split(", ")[5].replace(")","");
-            // Extract the appropriate numbers
-            let obstacleX = $('#obstacle').css('transform').split(", ")[4];
+            // Safely read the transform property of the player and obstacle
+            let pTrans = $('#player').css('transform');
+            let oTrans = $('#obstacle').css('transform');
+
+            // If obstacle is not visible or transforms are not set yet, retry later
+            if ($('#obstacle').is(':hidden') || pTrans === 'none' || oTrans === 'none') {
+                if (!gameOver) setTimeout(checkGameover, 50);
+                return;
+            }
+
+            function parseMatrix(m) {
+                const match = /matrix\(([^)]+)\)/.exec(m);
+                if (!match) return { x: 0, y: 0 };
+                const parts = match[1].split(',').map(s => parseFloat(s));
+                return { x: parts[4], y: parts[5] };
+            }
+
+            const p = parseMatrix(pTrans);
+            const o = parseMatrix(oTrans);
+            const playerY = p.y;
+            const obstacleX = o.x;
             console.log(playerY + " " + obstacleX);
+
             // Compare the numbers for the gameover situation
-            if(playerY > -90 && obstacleX > 30 && obstacleX < 200){
+            if (playerY > -100 && obstacleX > 30 && obstacleX < 200) {
+                gameOver = true;
                 $("#gameover").show();
                 $("#gameover").css("animation-name","gameoverAnimation");
                 $(".cloud").css("animation-play-state","paused");
                 $("#player").css("animation-play-state","paused");
                 $("#obstacle").css("animation-play-state","paused");
-            }else{
+                // Auto restart after 5 seconds
+                setTimeout(restartGame, 5000);
+            } else if (!gameOver && !isPaused) {
                 setTimeout(checkGameover, 50);
             }
         }
@@ -150,28 +243,67 @@
         // Make an obstacle by starting the obstacle animation
         function makeObstacle() {
 
+            // Respect pause/gameOver state
+            if (isPaused || gameOver) return;
+
             // You need to show the obstacle and start the animation here
+            $("#obstacle img").attr("src", getRandomObstacle());
+            $("#obstacle").show();
+            $("#obstacle").css("animation-name","obstacleAnimation");
         }
 
         // Make the player jump by starting the player animation
         function jump() {
             
             // You need to start the player jumping animation here
+            $("#player").css("animation-name","playerAnimation");
+        }
+
+        // Toggle pause state (Shift key)
+        function togglePause() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                $(".cloud, #player, #obstacle").css("animation-play-state","paused");
+                $("#paused").show();
+            } else {
+                $(".cloud, #player, #obstacle").css("animation-play-state","running");
+                $("#paused").hide();
+                // resume loops
+                setTimeout(checkGameover, 100);
+                setTimeout(makeObstacle, Math.random() * 2000);
+            }
         }
 
         $(function () {
-            // Handle the spacebar key for controlling the player
+            // Handle key controls: space to jump, shift to pause/unpause
             $(document).on("keydown", function(e) {
-                // The player jumps if the spacebar key is down
-                if (e.keyCode == 32){
-                    $("#player").css("animation-name","playerAnimation");
+                if (e.keyCode == 32) { // space
+                    if (!gameOver && !isPaused) {
+                        $("#player").css("animation-name","playerAnimation");
+                    } else if (gameOver) {
+                        // Spin the game over logo when game is over
+                        $("#gameover").css("animation-name","gameoverAnimation");
+                    }
+                } else if (e.keyCode == 16) { // shift
+                    togglePause();
                 }
+            });
+
+            // Handle restart button
+            $("#restart-btn").on("click", function() {
+                restartGame();
             });
 
             // The obstacle animation has finished
             $("#obstacle").on("animationend", function() {
 
                 // You need to hide the obstacle and stop the animation here
+                $("#obstacle").hide();
+                $("#obstacle").css("animation-name","none");
+                
+                // Increment score when obstacle is successfully avoided
+                score++;
+                $("#score-value").text(score);
 
                 // You will make another obstacle later
                 // Obstacle Move faster
@@ -186,6 +318,50 @@
             // The player animation has finished
             $("#player").on("animationend", function() {
 
+                // You need to stop the animation here
+                    $("#player").css("animation-name","none");
+            });
+
+            // Start the obstacle animation
+            setTimeout(makeObstacle, Math.random() * 2000);
+
+            // Start the game over checking
+            setTimeout(checkGameover, 100);
+        });
+    </script>
+</head>
+<body>
+    <div id="container">
+        <div id="sky">
+        </div>
+
+        <div id="ground">
+        </div>
+
+        <div class="cloud" id="cloud1">
+        </div>
+
+        <div class="cloud" id="cloud2">
+        </div>
+
+        <div id="obstacle">
+            <img src="" width="120" height="120"/>
+        </div>
+
+        <div id="player">
+            <img src="https://archives.bulbagarden.net/media/upload/a/a5/1017Ogerpon.png" width="200" height="200"/>
+        </div>
+        
+        <div id="score">
+            <p>Score: <span id="score-value">0</span></p>
+        </div>
+
+        <!-- The game over text -->
+        <div id="gameover-container">
+            <h1 id="gameover">Game Over</h1>
+        </div>
+    </div>
+</html>
                 // You need to stop the animation here
             });
 
@@ -228,4 +404,5 @@
             <h1 id="gameover">Game Over</h1>
         </div>
     </div>
+
 </html>
